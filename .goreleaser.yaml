@@ -1,0 +1,57 @@
+version: 2
+
+project_name: dctx
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: dctx
+    main: ./main.go
+    binary: dctx
+    ldflags:
+      # Embed version from git tag and strip debug symbols for smaller binaries.
+      - -s -w -X github.com/emersonkopp/dev-context-cli/cmd.Version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: dctx
+    name_template: "dctx_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Rename darwin → macos in the archive name to match what install.sh expects.
+    overrides:
+      - goos: darwin
+        name_template: "dctx_{{ .Version }}_macos_{{ .Arch }}"
+    format: tar.gz
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "dctx_{{ .Version }}_checksums.txt"
+  algorithm: sha256
+
+release:
+  github:
+    owner: emersonkopp
+    name: dev-context-cli
+  draft: false
+  prerelease: auto
+  name_template: "v{{ .Version }}"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch

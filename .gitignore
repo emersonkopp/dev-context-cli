@@ -1,0 +1,11 @@
+# Build output
+dctx
+dist/
+
+# macOS
+.DS_Store
+
+# Go
+*.test
+*.out
+vendor/
