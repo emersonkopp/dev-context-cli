@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/inconshreveable/go-update"
 )
@@ -32,11 +34,25 @@ type Asset struct {
 
 // LatestRelease fetches the latest release info from GitHub.
 func LatestRelease() (*Release, error) {
-	req, err := http.NewRequest(http.MethodGet, githubAPI, nil)
+	return fetchReleaseFrom(githubAPI)
+}
+
+// fetchReleaseFrom fetches release info from the given URL. Extracted from
+// LatestRelease so it can be exercised against a test server.
+func fetchReleaseFrom(url string) (*Release, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
+	// The GitHub API requires a User-Agent header; requests without it are
+	// rejected with 403.
+	req.Header.Set("User-Agent", "dctx")
+	// Authenticate when a token is available to raise the rate limit from 60
+	// to 5000 requests/hour. Falls back to anonymous when no token is set.
+	if token := githubToken(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -45,7 +61,7 @@ func LatestRelease() (*Release, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned %d", resp.StatusCode)
+		return nil, newAPIError(resp)
 	}
 
 	var rel Release
@@ -53,6 +69,33 @@ func LatestRelease() (*Release, error) {
 		return nil, fmt.Errorf("parsing release info: %w", err)
 	}
 	return &rel, nil
+}
+
+// githubToken returns a GitHub token from the environment, if present.
+func githubToken() string {
+	for _, env := range []string{"GITHUB_TOKEN", "GH_TOKEN"} {
+		if v := strings.TrimSpace(os.Getenv(env)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// newAPIError builds a helpful error for a non-200 GitHub API response,
+// detecting the common rate-limit case to guide the user.
+func newAPIError(resp *http.Response) error {
+	if resp.StatusCode == http.StatusForbidden &&
+		resp.Header.Get("X-RateLimit-Remaining") == "0" {
+		msg := "GitHub API rate limit exceeded"
+		if reset := resp.Header.Get("X-RateLimit-Reset"); reset != "" {
+			if ts, err := strconv.ParseInt(reset, 10, 64); err == nil {
+				msg += fmt.Sprintf(" (resets at %s)", time.Unix(ts, 0).Format(time.Kitchen))
+			}
+		}
+		return fmt.Errorf("%s. Set GITHUB_TOKEN or GH_TOKEN to raise the limit "+
+			"(60→5000/h), or retry later", msg)
+	}
+	return fmt.Errorf("GitHub API returned %d", resp.StatusCode)
 }
 
 // NeedsUpdate returns true when latestTag is newer than currentVersion.
@@ -102,7 +145,16 @@ func AssetURL(rel *Release) (string, error) {
 
 // Apply downloads the binary at url and replaces the currently running executable.
 func Apply(url string) error {
-	resp, err := http.Get(url) //nolint:noctx
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("creating download request: %w", err)
+	}
+	req.Header.Set("User-Agent", "dctx")
+	if token := githubToken(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("downloading update: %w", err)
 	}
