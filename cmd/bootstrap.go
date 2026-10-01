@@ -184,12 +184,23 @@ func ensureCloned(repoPath string, yes bool) error {
 	}
 
 	// Clone.
-	color.Cyan("  Cloning %s into %s…", config.DefaultRepoURL, repoPath)
+	// Use -c url.<https>.insteadOf overrides to force HTTPS regardless of any
+	// global gitconfig rules (e.g. url.ssh://git@github.com/.insteadOf=https://github.com/)
+	// that would rewrite the URL and break cloning on machines without SSH keys.
+	cloneURL := config.DefaultRepoURL
+	color.Cyan("  Cloning %s into %s…", cloneURL, repoPath)
 	if err := os.MkdirAll(filepath.Dir(repoPath), 0o755); err != nil {
 		return fmt.Errorf("creating parent directory: %w", err)
 	}
 
-	cloneCmd := exec.Command("git", "clone", config.DefaultRepoURL, repoPath)
+	cloneCmd := exec.Command(
+		"git",
+		"-c", "url.https://github.com/.insteadOf=git@github.com:",
+		"-c", "url.https://github.com/.insteadOf=ssh://git@github.com/",
+		"clone",
+		cloneURL,
+		repoPath,
+	)
 	cloneCmd.Stdout = os.Stdout
 	cloneCmd.Stderr = os.Stderr
 	if err := cloneCmd.Run(); err != nil {
