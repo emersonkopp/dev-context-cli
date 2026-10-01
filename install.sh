@@ -23,7 +23,7 @@ cyan()   { printf '\033[0;36m%s\033[0m\n' "$*"; }
 detect_os() {
   case "$(uname -s)" in
     Linux*)  echo "linux"  ;;
-    Darwin*) echo "macos"  ;;
+    Darwin*) echo "darwin" ;;
     *)
       red "Unsupported OS: $(uname -s)"
       exit 1

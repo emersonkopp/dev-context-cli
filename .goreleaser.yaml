@@ -11,7 +11,6 @@ builds:
     main: ./main.go
     binary: dctx
     ldflags:
-      # Embed version from git tag and strip debug symbols for smaller binaries.
       - -s -w -X github.com/emersonkopp/dev-context-cli/cmd.Version={{.Version}}
     env:
       - CGO_ENABLED=0
@@ -24,11 +23,9 @@ builds:
 
 archives:
   - id: dctx
+    # Use {{ .Os }} directly — goreleaser uses "darwin" for macOS.
+    # install.sh handles both "darwin" and "macos" spellings.
     name_template: "dctx_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    # Rename darwin → macos in the archive name to match what install.sh expects.
-    overrides:
-      - goos: darwin
-        name_template: "dctx_{{ .Version }}_macos_{{ .Arch }}"
     format: tar.gz
     files:
       - README.md
