@@ -77,9 +77,20 @@ dctx install
 | Artefato | Destino |
 |---|---|
 | `kiro/steering/*.md` | `~/.kiro/steering/` |
+| `kiro/skills/<nome>/SKILL.md` | `~/.kiro/skills/<nome>/SKILL.md` |
 | `kiro/settings/cli.json` | `~/.kiro/settings/cli.json` *(merge — não sobrescreve chaves existentes)* |
 
 É seguro rodar múltiplas vezes. Arquivos já atualizados são ignorados.
+
+**Remoção de órfãos:** artefatos que o `dctx` instalou antes e que foram **renomeados ou
+removidos** no monorepo são apagados do destino automaticamente na instalação seguinte (o `dctx`
+mantém um manifesto em `~/.dev-context/kiro-manifest.json`). Arquivos que o `dctx` **nunca**
+instalou — como skills específicas de organização/cliente mantidas apenas localmente — nunca são
+removidos.
+
+> **Migração (uma vez):** artefatos instalados por versões do `dctx` anteriores ao manifesto não
+> constam nele e, portanto, não são removidos automaticamente na primeira execução. Se você
+> renomeou/removeu artefatos nessa transição, apague os nomes antigos manualmente uma única vez.
 
 ### `dctx status`
 

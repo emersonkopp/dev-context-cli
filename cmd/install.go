@@ -14,10 +14,13 @@ var installCmd = &cobra.Command{
 	Short: "Install and configure all AI tool artifacts from the monorepo",
 	Long: `Copies artifacts from the local dev-context monorepo to their global
 destinations on this machine. Safe to run multiple times — files that are
-already up-to-date are skipped.
+already up-to-date are skipped. Artifacts previously installed by dctx that no
+longer exist in the repo (e.g. renamed or deleted) are removed; files dctx
+never installed (such as organization-specific local skills) are left intact.
 
 Currently installs:
   • Kiro steerings  → ~/.kiro/steering/
+  • Kiro skills     → ~/.kiro/skills/<name>/SKILL.md
   • Kiro settings   → ~/.kiro/settings/cli.json  (merged, preserves existing keys)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
