@@ -17,11 +17,14 @@ var rootCmd = &cobra.Command{
 	Long: `dctx manages the dev-context monorepo artifacts (steerings, settings, prompts,
 agents) and installs them into the correct global locations for each AI tool.
 
-Quick start:
-  dctx config init   # configure the path to your local monorepo clone
-  dctx install       # install all artifacts on this machine
-  dctx sync          # pull/push changes to/from GitHub
+First time on a new machine:
+  curl -fsSL https://raw.githubusercontent.com/emersonkopp/dev-context-cli/main/install.sh | bash
+
+That's it. The script installs dctx and runs 'dctx bootstrap' automatically.
+
+Other useful commands:
   dctx status        # check what is installed and up-to-date
+  dctx sync          # pull/push changes to/from GitHub
   dctx update        # update dctx itself to the latest release`,
 	SilenceUsage: true,
 }
@@ -35,6 +38,8 @@ func Execute() {
 }
 
 func init() {
+	rootCmd.AddCommand(bootstrapCmd)
+
 	rootCmd.AddCommand(configCmd)
 	configCmd.AddCommand(configInitCmd)
 	configCmd.AddCommand(configShowCmd)

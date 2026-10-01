@@ -4,35 +4,46 @@ CLI para gerenciar o monorepo [dev-context](https://github.com/emersonkopp/dev-c
 
 ## Instalação
 
+**Uma linha faz tudo:** instala o binário, clona o monorepo e configura os artefatos.
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/emersonkopp/dev-context-cli/main/install.sh | bash
 ```
 
-O script detecta automaticamente o OS (Linux/macOS) e a arquitetura (amd64/arm64) e baixa o binário correto do GitHub Releases.
+O script detecta automaticamente o OS (Linux/macOS) e a arquitetura (amd64/arm64). Não requer interação em condições normais — a única pergunta possível é sobre o caminho de clone, caso `~/git/dev-context` já exista com outro conteúdo.
 
-Para instalar em um diretório específico:
+### Variáveis de ambiente opcionais
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `INSTALL_DIR` | `/usr/local/bin` | Onde instalar o binário `dctx` |
+| `REPO_PATH` | `~/git/dev-context` | Onde clonar o monorepo |
+| `DCTX_VERSION` | *(latest)* | Versão específica a instalar |
+| `SKIP_BOOTSTRAP` | `0` | `1` para instalar só o binário sem configurar |
 
 ```bash
-INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/emersonkopp/dev-context-cli/main/install.sh | bash
+# Exemplos
+INSTALL_DIR=~/.local/bin curl -fsSL .../install.sh | bash
+REPO_PATH=~/work/dev-context curl -fsSL .../install.sh | bash
+SKIP_BOOTSTRAP=1 curl -fsSL .../install.sh | bash   # só o binário
 ```
 
-Para instalar uma versão específica:
+### Instalar manualmente o binário
+
+Se quiser só o binário sem executar o bootstrap, baixe diretamente de
+https://github.com/emersonkopp/dev-context-cli/releases e execute `dctx bootstrap` depois.
+
+## Bootstrap manual (re-setup ou nova máquina sem curl)
 
 ```bash
-DCTX_VERSION=v1.2.0 curl -fsSL .../install.sh | bash
+dctx bootstrap
 ```
 
-## Setup inicial
+Faz a mesma coisa que o `install.sh` pós-instalação: clona o monorepo (se ausente), salva a config e instala os artefatos. Aceita as mesmas flags:
 
 ```bash
-# 1. Clonar o monorepo (se ainda não tiver)
-git clone https://github.com/emersonkopp/dev-context ~/git/dev-context
-
-# 2. Configurar o dctx
-dctx config init
-
-# 3. Instalar todos os artefatos
-dctx install
+dctx bootstrap --repo-path ~/outro/caminho   # clone em caminho diferente
+dctx bootstrap --yes                          # sem prompts, aceita defaults
 ```
 
 ## Comandos
@@ -176,5 +187,5 @@ dev-context-cli/
 ## Requisitos
 
 - Git instalado e disponível no `$PATH`
-- Monorepo `dev-context` clonado localmente
 - macOS ou Linux (amd64 ou arm64)
+- `curl` ou `wget` para o script de instalação
