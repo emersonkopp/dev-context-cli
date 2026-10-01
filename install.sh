@@ -77,12 +77,17 @@ download() {
 install_binary() {
   local os="$1" arch="$2" version="$3"
 
-  local archive="${BINARY}_${version}_${os}_${arch}.tar.gz"
+  # GoReleaser strips the leading 'v' from the archive filename.
+  # e.g. tag v1.1.1 → dctx_1.1.1_linux_amd64.tar.gz
+  local ver_bare="${version#v}"
+
+  local archive="${BINARY}_${ver_bare}_${os}_${arch}.tar.gz"
   local url="https://github.com/${REPO}/releases/download/${version}/${archive}"
 
   cyan "Downloading ${url}"
 
-  local tmp
+  # Declare tmp before the trap so it is always bound under set -u.
+  local tmp=""
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
 
