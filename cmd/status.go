@@ -42,7 +42,11 @@ var statusCmd = &cobra.Command{
 				printArtifactStatus(s)
 			}
 		}
-		fmt.Println()
+
+		// Informative Tools section (read-only; install via 'dctx tools install').
+		if err := printToolsStatus(cfg.RepoPath); err != nil {
+			color.Red("  ✗  failed to get tools status: %v", err)
+		}
 		return nil
 	},
 }

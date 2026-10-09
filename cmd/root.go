@@ -49,5 +49,9 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(updateCmd)
 
+	rootCmd.AddCommand(toolsCmd)
+	toolsCmd.AddCommand(toolsStatusCmd)
+	toolsCmd.AddCommand(toolsInstallCmd)
+
 	rootCmd.Version = Version
 }
