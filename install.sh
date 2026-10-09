@@ -26,8 +26,10 @@ cyan()   { printf '\033[0;36m%s\033[0m\n' "$*"; }
 # ── detect OS ────────────────────────────────────────────────────────────────
 detect_os() {
   case "$(uname -s)" in
-    Linux*)  echo "linux"  ;;
-    Darwin*) echo "darwin" ;;
+    Linux*)  echo "linux" ;;
+    # Release assets name macOS "macos" (see .goreleaser.yaml) so that the
+    # self-update matcher in dctx <= 1.3.0 can find them. Keep this in sync.
+    Darwin*) echo "macos" ;;
     *)
       red "Unsupported OS: $(uname -s)"
       exit 1
