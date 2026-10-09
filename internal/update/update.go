@@ -118,12 +118,15 @@ func AssetURL(rel *Release) (string, error) {
 		"amd64": "amd64",
 		"arm64": "arm64",
 	}
-	osMap := map[string]string{
-		"linux":  "linux",
-		"darwin": "macos",
+	// Accept multiple OS spellings per platform. goreleaser's default
+	// name_template uses "darwin" for macOS, but older releases (and some
+	// configs) used "macos"; match either so updates never break on naming.
+	osAliases := map[string][]string{
+		"linux":  {"linux"},
+		"darwin": {"darwin", "macos"},
 	}
 
-	osStr, ok := osMap[goos]
+	osNames, ok := osAliases[goos]
 	if !ok {
 		return "", fmt.Errorf("unsupported OS: %s", goos)
 	}
@@ -133,14 +136,19 @@ func AssetURL(rel *Release) (string, error) {
 	}
 
 	// Expected filename pattern: dctx_<version>_<os>_<arch>
-	// e.g. dctx_v1.0.0_linux_amd64 or dctx_v1.0.0_macos_arm64
+	// e.g. dctx_1.0.0_linux_amd64 or dctx_1.3.0_darwin_arm64
 	for _, asset := range rel.Assets {
 		name := strings.ToLower(asset.Name)
-		if strings.Contains(name, osStr) && strings.Contains(name, archStr) {
-			return asset.BrowserDownloadURL, nil
+		if !strings.Contains(name, archStr) {
+			continue
+		}
+		for _, osStr := range osNames {
+			if strings.Contains(name, osStr) {
+				return asset.BrowserDownloadURL, nil
+			}
 		}
 	}
-	return "", fmt.Errorf("no asset found for %s/%s in release %s", osStr, archStr, rel.TagName)
+	return "", fmt.Errorf("no asset found for %s/%s in release %s", goos, archStr, rel.TagName)
 }
 
 // Apply downloads the binary at url and replaces the currently running executable.
