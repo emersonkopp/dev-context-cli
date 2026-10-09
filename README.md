@@ -200,3 +200,5 @@ dev-context-cli/
 - Git instalado e disponível no `$PATH`
 - macOS ou Linux (amd64 ou arm64)
 - `curl` ou `wget` para o script de instalação
+
+<!-- release check: self-update e2e validation for v1.3.4 -->
