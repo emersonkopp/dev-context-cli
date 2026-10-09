@@ -2,11 +2,15 @@
 package update
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -186,12 +190,48 @@ func Apply(url string) error {
 		return err
 	}
 
-	// Re-open for the updater.
+	// Re-open and extract the real binary from the .tar.gz release archive.
+	// (Applying the raw tarball would corrupt the binary — "Exec format error".)
 	f, err := os.Open(tmp.Name())
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	return update.Apply(f, update.Options{})
+	binaryBytes, err := extractBinary(f)
+	if err != nil {
+		return fmt.Errorf("extracting binary from archive: %w", err)
+	}
+
+	return update.Apply(bytes.NewReader(binaryBytes), update.Options{})
+}
+
+// extractBinary reads a gzip-compressed tar stream (a goreleaser release
+// archive) and returns the bytes of the "dctx" executable inside it.
+func extractBinary(r io.Reader) ([]byte, error) {
+	gz, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, fmt.Errorf("opening gzip: %w", err)
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("reading tar: %w", err)
+		}
+		// Match the binary by base name so a leading path does not matter.
+		if filepath.Base(hdr.Name) == binaryName {
+			data, err := io.ReadAll(tr)
+			if err != nil {
+				return nil, fmt.Errorf("reading %s from archive: %w", binaryName, err)
+			}
+			return data, nil
+		}
+	}
+	return nil, fmt.Errorf("binary %q not found in release archive", binaryName)
 }
