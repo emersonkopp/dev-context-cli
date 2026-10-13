@@ -124,6 +124,53 @@ func (p *Provider) Install(repoPath string) error {
 	return nil
 }
 
+// Uninstall removes every artifact dctx installed for Kiro, as recorded in the
+// manifest. It is deliberately conservative:
+//   - Only paths in dctx's own manifest are touched; files dctx never installed
+//     (e.g. organization-local skills) are preserved.
+//   - cli.json is NOT deleted: it is a merged file that may contain the user's
+//     own local keys, so removing it would be destructive. dctx simply stops
+//     managing it.
+//
+// After removing the artifacts it deletes the manifest so a later install
+// starts from a clean slate. A missing manifest is a no-op (no error).
+func (p *Provider) Uninstall() error {
+	previous, err := readManifest()
+	if err != nil {
+		return err
+	}
+	if len(previous) == 0 {
+		return nil // nothing recorded — nothing to remove
+	}
+
+	for _, dst := range previous {
+		// Never delete cli.json: it is merged and may hold the user's own keys.
+		if filepath.Base(dst) == "cli.json" {
+			color.White("  –  kept       %s (merged file, may hold your keys)", prettyPath(dst))
+			continue
+		}
+		if _, statErr := os.Stat(dst); os.IsNotExist(statErr) {
+			continue // already gone
+		}
+		if err := os.Remove(dst); err != nil {
+			return fmt.Errorf("removing %s: %w", dst, err)
+		}
+		color.Yellow("  ⊖  removed    %s", prettyPath(dst))
+		// Clean up a now-empty skill directory (~/.kiro/skills/<name>/).
+		removeEmptyParent(dst)
+	}
+
+	// Drop the manifest so a future install starts clean.
+	mp, err := manifestPath()
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(mp); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing manifest: %w", err)
+	}
+	return nil
+}
+
 // manifestPath returns the path to dctx's install manifest for Kiro,
 // stored under ~/.dev-context/kiro-manifest.json.
 func manifestPath() (string, error) {

@@ -12,18 +12,24 @@ curl -fsSL https://raw.githubusercontent.com/emersonkopp/dev-context-cli/main/in
 
 O script detecta automaticamente o OS (Linux/macOS) e a arquitetura (amd64/arm64). Não requer interação em condições normais — a única pergunta possível é sobre o caminho de clone, caso `~/git/dev-context` já exista com outro conteúdo.
 
+> **Sem sudo.** Por padrão o binário é instalado em `~/.local/bin` (diretório do
+> usuário). Assim a instalação, o uso e o `dctx update` nunca pedem `sudo`.
+> Instalar em um local do sistema (ex.: `/usr/local/bin`) com `sudo` deixa o
+> binário com dono `root` e faz o `dctx update` falhar por permissão — evite.
+> Garanta que `~/.local/bin` esteja no seu `$PATH` (o instalador avisa se não estiver).
+
 ### Variáveis de ambiente opcionais
 
 | Variável | Padrão | Descrição |
 |---|---|---|
-| `INSTALL_DIR` | `/usr/local/bin` | Onde instalar o binário `dctx` |
+| `INSTALL_DIR` | `~/.local/bin` | Onde instalar o binário `dctx` (local do usuário, sem sudo) |
 | `REPO_PATH` | `~/git/dev-context` | Onde clonar o monorepo |
 | `DCTX_VERSION` | *(latest)* | Versão específica a instalar |
 | `SKIP_BOOTSTRAP` | `0` | `1` para instalar só o binário sem configurar |
 
 ```bash
 # Exemplos
-INSTALL_DIR=~/.local/bin curl -fsSL .../install.sh | bash
+INSTALL_DIR=~/bin curl -fsSL .../install.sh | bash
 REPO_PATH=~/work/dev-context curl -fsSL .../install.sh | bash
 SKIP_BOOTSTRAP=1 curl -fsSL .../install.sh | bash   # só o binário
 ```
@@ -135,7 +141,52 @@ Atualiza o próprio binário `dctx` para a versão mais recente disponível no G
 dctx update
 ```
 
-A atualização substitui o binário em-place, sem necessidade de reinstalar.
+A atualização substitui o binário em-place, sem necessidade de reinstalar. Antes de
+aplicar, o arquivo baixado é verificado contra o checksum SHA256 publicado no release
+(`dctx_<versão>_checksums.txt`): se o download estiver corrompido ou truncado, a
+atualização é abortada e o binário atual permanece intacto. A troca do binário é
+atômica (gravação em arquivo temporário + rename), então uma atualização interrompida
+nunca deixa um executável pela metade.
+
+> Instale sempre em um diretório do usuário (padrão `~/.local/bin`) para que o
+> `dctx update` funcione sem `sudo`. Veja a nota em **Instalação**.
+
+### `dctx uninstall`
+
+Remove os artefatos que o `dctx` instalou nas localizações globais de cada ferramenta.
+
+```bash
+dctx uninstall
+```
+
+É conservador por padrão:
+
+- Remove **apenas** os arquivos que o `dctx` instalou (registrados no manifesto). Skills
+  locais da organização e qualquer arquivo que o `dctx` nunca instalou são preservados.
+- Arquivos com merge que podem conter chaves suas (ex.: `~/.kiro/settings/cli.json`) **não**
+  são apagados.
+- O monorepo clonado nunca é tocado.
+- O estado em `~/.dev-context` (config + manifesto) é **preservado**, de modo que uma
+  reinstalação posterior retoma exatamente de onde parou.
+
+**Flags:**
+
+| Flag | Efeito |
+|---|---|
+| `--purge` | Também apaga `~/.dev-context` (config + manifesto) — estado zerado |
+| `--binary` | Também apaga o próprio binário `dctx` |
+| `-y`, `--yes` | Não pede confirmação |
+
+```bash
+dctx uninstall --purge          # remove artefatos e zera o estado
+dctx uninstall --binary --yes   # remove artefatos e o binário, sem prompt
+```
+
+**Recuperação de estado:** se você remover o `dctx` sem `--purge` (ou só apagar o binário),
+o estado em `~/.dev-context` continua lá; reinstalar e rodar `dctx install` retoma do ponto
+anterior. Se você zerar tudo com `--purge` (ou remover `~/.dev-context` manualmente), a
+reinstalação via `install.sh`/`dctx bootstrap` reaproveita o monorepo já clonado (ou re-clona
+no caminho padrão), recria a config e reconstrói o manifesto — o estado é recuperado.
 
 ## Workflow típico entre máquinas
 
@@ -171,6 +222,7 @@ dev-context-cli/
 ├── cmd/
 │   ├── root.go       # cobra root + wiring
 │   ├── install.go    # dctx install
+│   ├── uninstall.go  # dctx uninstall
 │   ├── sync.go       # dctx sync
 │   ├── status.go     # dctx status
 │   ├── update.go     # dctx update (self-update)

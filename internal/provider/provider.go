@@ -26,6 +26,12 @@ type Provider interface {
 	// destinations. It is idempotent: running it twice is safe.
 	Install(repoPath string) error
 
+	// Uninstall removes every artifact this provider installed, as recorded in
+	// its own manifest. It must never remove files the provider did not install
+	// and must leave merged user-owned files intact. Running it with nothing
+	// installed is a no-op.
+	Uninstall() error
+
 	// Status reports the installation state of every artifact managed by
 	// this provider.
 	Status(repoPath string) ([]ArtifactStatus, error)

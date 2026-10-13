@@ -37,8 +37,9 @@ The binary is always downloaded for the current OS and architecture.`,
 			return fmt.Errorf("finding asset: %w", err)
 		}
 		color.Cyan("  Downloading from %s…", assetURL)
+		color.White("  Verifying checksum before applying…")
 
-		if err := update.Apply(assetURL); err != nil {
+		if err := update.Apply(assetURL, rel.TagName); err != nil {
 			return fmt.Errorf("applying update: %w", err)
 		}
 

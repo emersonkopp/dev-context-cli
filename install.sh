@@ -6,7 +6,7 @@
 #
 # Environment variables:
 #   DCTX_VERSION   install a specific version (default: latest)
-#   INSTALL_DIR    where to put the binary (default: /usr/local/bin)
+#   INSTALL_DIR    where to put the binary (default: ~/.local/bin — no sudo needed)
 #   REPO_PATH      local path for the monorepo clone (default: ~/git/dev-context)
 #   SKIP_BOOTSTRAP set to "1" to install the binary only, skip bootstrap
 
@@ -14,7 +14,11 @@ set -euo pipefail
 
 REPO="emersonkopp/dev-context-cli"
 BINARY="dctx"
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+# Default to a user-writable directory so install, use and self-update never
+# require sudo. A root-owned location like /usr/local/bin forces 'sudo dctx
+# update', which fails for a normal user and can leave a corrupted binary.
+# Callers can still override INSTALL_DIR explicitly (e.g. a system-wide install).
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 SKIP_BOOTSTRAP="${SKIP_BOOTSTRAP:-0}"
 
 # ── colour helpers ────────────────────────────────────────────────────────────
@@ -102,19 +106,36 @@ install_binary() {
 
   if [[ -w "$INSTALL_DIR" ]]; then
     mv "${tmp}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+    chmod +x "${INSTALL_DIR}/${BINARY}"
   else
-    yellow "${INSTALL_DIR} is not writable — using sudo…"
+    # INSTALL_DIR is not writable by the current user. Installing here with
+    # sudo would leave a root-owned binary that 'dctx update' cannot replace
+    # without sudo — exactly the problem we want to avoid. Warn and suggest a
+    # user-writable location instead of silently escalating.
+    yellow ""
+    yellow "  ⚠  ${INSTALL_DIR} is not writable by your user."
+    yellow "     Installing there needs sudo and would make 'dctx update' require"
+    yellow "     sudo too (and risk a root-owned, hard-to-fix binary)."
+    yellow ""
+    yellow "     Recommended: install into a user-writable directory, e.g.:"
+    yellow "       INSTALL_DIR=\"\$HOME/.local/bin\" curl -fsSL .../install.sh | bash"
+    yellow ""
+    yellow "     Proceeding with sudo for this location…"
     sudo mv "${tmp}/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+    sudo chmod +x "${INSTALL_DIR}/${BINARY}"
   fi
-
-  chmod +x "${INSTALL_DIR}/${BINARY}"
 }
 
 # ── ensure INSTALL_DIR is on PATH ─────────────────────────────────────────────
 check_path() {
-  if ! command -v "$BINARY" &>/dev/null; then
+  # Resolve the binary on PATH to its real location; if it is not the one we
+  # just installed, INSTALL_DIR is probably missing from PATH.
+  local on_path=""
+  on_path="$(command -v "$BINARY" 2>/dev/null || true)"
+
+  if [[ "$on_path" != "${INSTALL_DIR}/${BINARY}" ]]; then
     yellow ""
-    yellow "  ${INSTALL_DIR} is not in your \$PATH."
+    yellow "  ${INSTALL_DIR} is not on your \$PATH (or another ${BINARY} shadows it)."
     yellow "  Add it to your shell profile (~/.zshrc, ~/.bashrc, etc.):"
     yellow "    export PATH=\"${INSTALL_DIR}:\$PATH\""
     yellow ""

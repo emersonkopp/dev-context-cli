@@ -104,3 +104,16 @@ func Init(repoPath string) (*Config, error) {
 	}
 	return cfg, nil
 }
+
+// RemoveState deletes the entire ~/.dev-context directory (config + manifests).
+// Used by 'dctx uninstall --purge'. A missing directory is a no-op.
+func RemoveState() error {
+	dir, err := Dir()
+	if err != nil {
+		return err
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("removing state dir: %w", err)
+	}
+	return nil
+}

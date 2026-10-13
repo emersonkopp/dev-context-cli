@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -156,7 +157,11 @@ func AssetURL(rel *Release) (string, error) {
 }
 
 // Apply downloads the binary at url and replaces the currently running executable.
-func Apply(url string) error {
+// version is the release tag (e.g. "v1.4.0") used to locate the checksums file;
+// when non-empty, the downloaded archive is verified against the published
+// SHA256 checksum before anything is applied, so a corrupted or truncated
+// download can never overwrite the running binary.
+func Apply(url, version string) error {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("creating download request: %w", err)
@@ -176,34 +181,51 @@ func Apply(url string) error {
 		return fmt.Errorf("download returned %d", resp.StatusCode)
 	}
 
-	// Write to a temp file first so we can verify before replacing.
-	tmp, err := os.CreateTemp("", binaryName+"-update-*")
+	// Read the whole archive into memory so we can verify its integrity before
+	// touching the running binary. Release archives are a few MB — safe to buffer.
+	archiveBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("creating temp file: %w", err)
-	}
-	defer os.Remove(tmp.Name())
-
-	if _, err := io.Copy(tmp, resp.Body); err != nil {
-		return fmt.Errorf("writing download: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return err
+		return fmt.Errorf("reading download: %w", err)
 	}
 
-	// Re-open and extract the real binary from the .tar.gz release archive.
+	// Verify the archive against the published SHA256 checksum. A mismatch means
+	// the download is corrupted/truncated; we abort before replacing anything.
+	if version != "" {
+		if err := verifyDownload(archiveBytes, url, version); err != nil {
+			return err
+		}
+	}
+
+	// Extract the real binary from the verified .tar.gz release archive.
 	// (Applying the raw tarball would corrupt the binary — "Exec format error".)
-	f, err := os.Open(tmp.Name())
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	binaryBytes, err := extractBinary(f)
+	binaryBytes, err := extractBinary(bytes.NewReader(archiveBytes))
 	if err != nil {
 		return fmt.Errorf("extracting binary from archive: %w", err)
 	}
 
+	// go-update writes to a temp file in the target directory and renames it
+	// over the current binary atomically, so an interrupted apply never leaves
+	// a half-written (corrupted) executable in place.
 	return update.Apply(bytes.NewReader(binaryBytes), update.Options{})
+}
+
+// verifyDownload fetches the release checksums file and verifies that
+// archiveBytes matches the published SHA256 for the asset named in assetURL.
+func verifyDownload(archiveBytes []byte, assetURL, version string) error {
+	checksumURL, err := checksumURLFromAsset(assetURL, version)
+	if err != nil {
+		return fmt.Errorf("locating checksums file: %w", err)
+	}
+	contents, err := fetchChecksums(checksumURL)
+	if err != nil {
+		return fmt.Errorf("verifying download: %w", err)
+	}
+	assetName := path.Base(assetURL)
+	wantHex, err := checksumForAsset(contents, assetName)
+	if err != nil {
+		return fmt.Errorf("verifying download: %w", err)
+	}
+	return verifyChecksum(archiveBytes, wantHex)
 }
 
 // extractBinary reads a gzip-compressed tar stream (a goreleaser release
