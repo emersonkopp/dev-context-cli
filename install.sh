@@ -54,13 +54,55 @@ detect_arch() {
 }
 
 # ── fetch latest version from GitHub API ─────────────────────────────────────
+# Resolves the latest tag. The GitHub API (api.github.com) limits anonymous
+# requests to 60/hour per IP and answers 403 when exceeded — the usual cause of
+# "403" during install. We therefore:
+#   1. send a User-Agent (the API rejects requests without one),
+#   2. authenticate with GITHUB_TOKEN/GH_TOKEN when present (raises 60→5000/h),
+#   3. on a 403/rate-limit, print an actionable message and fall back to a
+#      no-API method (the redirect of the /releases/latest HTML page), so a
+#      rate-limited IP can still install without a token.
 latest_version() {
+  local api="https://api.github.com/repos/${REPO}/releases/latest"
+  local token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+
   if command -v curl &>/dev/null; then
-    curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-      | grep '"tag_name"' \
-      | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
+    local auth=()
+    [[ -n "$token" ]] && auth=(-H "Authorization: Bearer ${token}")
+
+    # Capture body + HTTP status so we can detect 403 instead of silently
+    # emitting an empty version.
+    local resp status body
+    resp=$(curl -sSL -w '\n%{http_code}' \
+      -H "User-Agent: dctx-install" \
+      -H "Accept: application/vnd.github+json" \
+      "${auth[@]}" \
+      "$api" 2>/dev/null) || true
+    status="${resp##*$'\n'}"
+    body="${resp%$'\n'*}"
+
+    if [[ "$status" == "200" ]]; then
+      printf '%s\n' "$body" \
+        | grep '"tag_name"' \
+        | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
+      return 0
+    fi
+
+    if [[ "$status" == "403" ]]; then
+      yellow "  ⚠  GitHub API returned 403 (likely anonymous rate limit, 60/h per IP)." >&2
+      if [[ -z "$token" ]]; then
+        yellow "     Set GITHUB_TOKEN to raise the limit to 5000/h:" >&2
+        yellow "       GITHUB_TOKEN=xxxx curl -fsSL .../install.sh | bash" >&2
+      fi
+      yellow "     Trying a no-API fallback to resolve the latest version…" >&2
+      latest_version_no_api && return 0
+    fi
+
+    # Any other status: try the no-API fallback before giving up.
+    latest_version_no_api && return 0
+    return 1
   elif command -v wget &>/dev/null; then
-    wget -qO- "https://api.github.com/repos/${REPO}/releases/latest" \
+    wget -qO- --header="User-Agent: dctx-install" "$api" \
       | grep '"tag_name"' \
       | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/'
   else
@@ -69,13 +111,31 @@ latest_version() {
   fi
 }
 
+# latest_version_no_api resolves the latest tag WITHOUT the rate-limited JSON
+# API, by reading the Location header of the /releases/latest redirect
+# (…/releases/tag/vX.Y.Z). This endpoint is not subject to the 60/h API limit.
+latest_version_no_api() {
+  command -v curl &>/dev/null || return 1
+  local loc
+  loc=$(curl -sSI "https://github.com/${REPO}/releases/latest" \
+    | grep -i '^location:' | tail -1 | tr -d '\r')
+  # Extract the trailing tag segment after /tag/.
+  loc="${loc##*/tag/}"
+  loc="$(printf '%s' "$loc" | tr -d '[:space:]')"
+  [[ -n "$loc" && "$loc" == v* ]] || return 1
+  printf '%s\n' "$loc"
+}
+
 # ── download helper ───────────────────────────────────────────────────────────
 download() {
   local url="$1" dest="$2"
+  local token="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
   if command -v curl &>/dev/null; then
-    curl -fsSL "$url" -o "$dest"
+    local auth=()
+    [[ -n "$token" ]] && auth=(-H "Authorization: Bearer ${token}")
+    curl -fsSL -H "User-Agent: dctx-install" "${auth[@]}" "$url" -o "$dest"
   else
-    wget -qO "$dest" "$url"
+    wget -qO "$dest" --header="User-Agent: dctx-install" "$url"
   fi
 }
 
@@ -156,7 +216,12 @@ main() {
     cyan "▸ Fetching latest release…"
     version=$(latest_version)
     if [[ -z "$version" ]]; then
-      red "Could not determine the latest version. Set DCTX_VERSION and retry."
+      red "Could not determine the latest version (GitHub may be rate-limiting this IP)."
+      yellow "Workarounds:"
+      yellow "  • Pin a version (skips the API entirely):"
+      yellow "      DCTX_VERSION=v1.4.0 curl -fsSL .../install.sh | bash"
+      yellow "  • Authenticate to raise the API limit (60→5000/h):"
+      yellow "      GITHUB_TOKEN=xxxx curl -fsSL .../install.sh | bash"
       exit 1
     fi
   fi
