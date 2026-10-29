@@ -5,6 +5,7 @@ import (
 
 	"github.com/emersonkopp/dev-context-cli/internal/config"
 	"github.com/emersonkopp/dev-context-cli/providers/kiro"
+	"github.com/emersonkopp/dev-context-cli/providers/opencode"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -21,7 +22,11 @@ never installed (such as organization-specific local skills) are left intact.
 Currently installs:
   • Kiro steerings  → ~/.kiro/steering/
   • Kiro skills     → ~/.kiro/skills/<name>/SKILL.md
-  • Kiro settings   → ~/.kiro/settings/cli.json  (merged, preserves existing keys)`,
+  • Kiro settings   → ~/.kiro/settings/cli.json  (merged, preserves existing keys)
+  • OpenCode skills → ~/.config/opencode/skills/<name>/SKILL.md
+  • OpenCode config → merged into ~/.config/opencode/opencode.json(c)
+                      (reference skills/instructions/MCP entries; steerings are
+                      reused in place — never copied)`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
@@ -33,6 +38,7 @@ Currently installs:
 			Install(string) error
 		}{
 			&kiro.Provider{},
+			&opencode.Provider{},
 		}
 
 		anyError := false

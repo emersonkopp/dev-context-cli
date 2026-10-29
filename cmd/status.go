@@ -6,6 +6,7 @@ import (
 	"github.com/emersonkopp/dev-context-cli/internal/config"
 	"github.com/emersonkopp/dev-context-cli/internal/provider"
 	"github.com/emersonkopp/dev-context-cli/providers/kiro"
+	"github.com/emersonkopp/dev-context-cli/providers/opencode"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -25,6 +26,7 @@ var statusCmd = &cobra.Command{
 			Status(string) ([]provider.ArtifactStatus, error)
 		}{
 			&kiro.Provider{},
+			&opencode.Provider{},
 		}
 
 		for _, p := range providers {

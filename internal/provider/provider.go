@@ -1,5 +1,5 @@
 // Package provider defines the interface that every AI tool provider must implement.
-// Adding support for a new tool (Copilot, Cursor, etc.) is done by creating a
+// Adding support for a new tool (Cursor, Claude, etc.) is done by creating a
 // new package under providers/ that implements this interface.
 package provider
 
