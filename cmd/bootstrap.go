@@ -10,6 +10,7 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/emersonkopp/dev-context-cli/internal/config"
 	"github.com/emersonkopp/dev-context-cli/providers/kiro"
+	"github.com/emersonkopp/dev-context-cli/providers/opencode"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -75,6 +76,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		Install(string) error
 	}{
 		&kiro.Provider{},
+		&opencode.Provider{},
 	}
 
 	anyError := false

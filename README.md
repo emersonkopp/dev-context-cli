@@ -85,6 +85,29 @@ dctx install
 | `kiro/steering/*.md` | `~/.kiro/steering/` |
 | `kiro/skills/<nome>/SKILL.md` | `~/.kiro/skills/<nome>/SKILL.md` |
 | `kiro/settings/cli.json` | `~/.kiro/settings/cli.json` *(merge — não sobrescreve chaves existentes)* |
+| `opencode/skills/<id>/SKILL.md` | `~/.config/opencode/skills/<id>/SKILL.md` |
+| `opencode/config/opencode.reference.jsonc` | mesclado em `~/.config/opencode/opencode.json(c)` |
+
+**Suporte ao OpenCode** (estratégia A do port `docs/plan-port-opencode.md` no monorepo):
+
+- **Skills variantes** (`opencode/skills/`) são copiadas para `~/.config/opencode/skills/`,
+  com o mesmo modelo de manifesto/remoção de órfãos do Kiro
+  (manifesto em `~/.dev-context/opencode-manifest.json`).
+- **Steerings não são copiados** — o OpenCode consome `kiro/steering/*.md` direto do
+  monorepo. O `dctx` apenas grava a entrada `instructions` no config global, com o
+  **caminho real do clone** (expandido, não `~`), funcionando mesmo com o monorepo
+  clonado fora de `~/git/dev-context`.
+- **Merge do config global** é idempotente e conservador: chaves de terceiros
+  (`theme`, `model`, skills de outras fontes, outros servidores MCP etc.) são
+  preservadas; entradas gerenciadas (`skills`, `instructions`, `$schema`) são
+  deduplicadas; um `mcp.servers.ai-router` **já existente nunca é sobrescrito**.
+  O arquivo de referência é JSONC (com comentários) e é lido com tolerância a
+  comentários e vírgulas de sobra; o resultado escrito é JSON puro.
+- O arquivo de referência basta como `opencode.json` **ou** `opencode.jsonc`;
+  o `dctx` mescla no que já existir e cria `opencode.json` em máquina fresca.
+- Em máquina sem a branch do OpenCode no monorepo (sem `opencode/`), o
+  `dctx install`/`status` simplesmente não gerenciam nada a mais — comportamento
+  do Kiro permanece idêntico.
 
 É seguro rodar múltiplas vezes. Arquivos já atualizados são ignorados.
 
@@ -97,6 +120,10 @@ removidos.
 > **Migração (uma vez):** artefatos instalados por versões do `dctx` anteriores ao manifesto não
 > constam nele e, portanto, não são removidos automaticamente na primeira execução. Se você
 > renomeou/removeu artefatos nessa transição, apague os nomes antigos manualmente uma única vez.
+
+O mesmo modelo vale para o OpenCode: skills variantes renomeadas/removidas no monorepo são
+apagadas de `~/.config/opencode/skills/` na instalação seguinte; skills locais da organização
+nunca são removidas, e o config global mesclado não é apagado.
 
 ### `dctx status`
 
@@ -113,6 +140,12 @@ Saída de exemplo:
   ✓  up-to-date     kiro/steering/testing-policy.md
   ⚠  outdated       kiro/steering/auto-update-policy.md
   ✓  up-to-date     kiro/settings/cli.json
+
+▸ OpenCode
+  ✓  up-to-date     opencode/skills/dev-context-manager/SKILL.md
+  ✓  up-to-date     opencode/config/opencode.reference.jsonc
+  ✗  not installed  opencode/skills/router-usage/SKILL.md
+                   → ~/.config/opencode/skills/router-usage/SKILL.md
 ```
 
 ### `dctx sync`
@@ -163,7 +196,8 @@ dctx uninstall
 
 - Remove **apenas** os arquivos que o `dctx` instalou (registrados no manifesto). Skills
   locais da organização e qualquer arquivo que o `dctx` nunca instalou são preservados.
-- Arquivos com merge que podem conter chaves suas (ex.: `~/.kiro/settings/cli.json`) **não**
+- Arquivos com merge que podem conter chaves suas
+  (ex.: `~/.kiro/settings/cli.json` e `~/.config/opencode/opencode.json(c)`) **não**
   são apagados.
 - O monorepo clonado nunca é tocado.
 - O estado em `~/.dev-context` (config + manifesto) é **preservado**, de modo que uma
@@ -233,7 +267,10 @@ dev-context-cli/
 │   ├── git/          # operações git
 │   └── update/       # self-update via GitHub Releases
 ├── providers/
-│   └── kiro/         # implementação do Provider para o Kiro
+│   ├── kiro/         # implementação do Provider para o Kiro
+│   └── opencode/     # implementação do Provider para o OpenCode V2
+│       ├── opencode.go   # skills + manifesto + órfãos + status
+│       └── merge.go      # merge JSONC idempotente do config global
 ├── .goreleaser.yaml
 ├── .github/
 │   └── workflows/
@@ -244,7 +281,8 @@ dev-context-cli/
 ## Adicionando suporte a uma nova ferramenta
 
 1. Crie `providers/<nome>/` implementando a interface `provider.Provider`.
-2. Registre o novo provider em `cmd/install.go` e `cmd/status.go`.
+2. Registre o novo provider em `cmd/install.go`, `cmd/status.go`,
+   `cmd/uninstall.go` e `cmd/bootstrap.go`.
 3. Adicione os artefatos no monorepo `dev-context/`.
 
 ## Requisitos
